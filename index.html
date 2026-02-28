@@ -3,61 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>เครื่องตรวจความสด</title>
+    <title>ระบบตรวจความสดอาหาร (อัญชัน-ไคโตซาน)</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #f4f4f9; margin: 0; padding: 20px; }
-        #video-container { position: relative; width: 100%; max-width: 400px; margin: auto; border-radius: 15px; overflow: hidden; background: #000; }
+        body { font-family: 'Prompt', sans-serif; text-align: center; margin: 0; padding: 0; transition: background 0.5s; background-color: #f8f9fa; }
+        .container { padding: 20px; max-width: 450px; margin: auto; }
+        h2 { color: #333; margin-top: 10px; text-shadow: 1px 1px 2px rgba(0,0,0,0.1); }
+        
+        /* กล้องและวงกลมสแกน */
+        #video-container { position: relative; width: 100%; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.3); background: #000; line-height: 0; }
         video { width: 100%; height: auto; }
-        .reticle { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; border: 3px solid #fff; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; }
-        #result { margin-top: 20px; padding: 20px; border-radius: 15px; font-size: 24px; font-weight: bold; background: white; }
+        .reticle { position: absolute; top: 50%; left: 50%; width: 60px; height: 60px; border: 4px dashed white; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); pointer-events: none; animation: pulse 2s infinite; }
+        
+        /* การ์ดแสดงผล */
+        #result-card { margin-top: 25px; padding: 25px; border-radius: 20px; background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 2px solid #ddd; }
+        .status-text { font-size: 32px; font-weight: bold; margin-bottom: 5px; }
+        .msg-text { font-size: 18px; color: #444; margin-bottom: 15px; }
+        .rgb-info { font-size: 14px; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 10px; color: #666; }
+        
+        @keyframes pulse { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.1); } 100% { transform: translate(-50%, -50%) scale(1); } }
+        button { background: white; color: #333; border: 1px solid #ddd; padding: 10px 20px; border-radius: 50px; margin-top: 15px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h2>สแกนสีแผ่นอัญชัน</h2>
+
+<div class="container">
+    <h2>ตรวจความสดอาหาร</h2>
+    
     <div id="video-container">
         <video id="webcam" autoplay playsinline></video>
         <div class="reticle"></div>
     </div>
+
     <canvas id="canvas" style="display:none;"></canvas>
-    <div id="result">กำลังเปิดกล้อง...</div>
 
-    <script>
-        const video = document.getElementById('webcam');
-        const canvas = document.getElementById('canvas');
-        const resultDiv = document.getElementById('result');
+    <div id="result-card">
+        <div id="status" class="status-text">⏳ กำลังเตรียมกล้อง...</div>
+        <div id="message" class="msg-text">กรุณานำแผ่นฟิล์มมาจ่อที่วงกลม</div>
+        <div id="rgb-val" class="rgb-info">ค่าสีจริง: -</div>
+    </div>
+    
+    <button onclick="location.reload()">🔄 รีเฟรชระบบ</button>
+</div>
 
-        async function start() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                video.srcObject = stream;
-            } catch (err) { resultDiv.innerText = "❌ เปิดกล้องไม่ได้"; }
+<script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const statusText = document.getElementById('status');
+    const msgText = document.getElementById('message');
+    const rgbVal = document.getElementById('rgb-val');
+    const resultCard = document.getElementById('result-card');
+
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" } 
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            statusText.innerText = "❌ กล้องไม่พร้อมใช้งาน";
+            msgText.innerText = "กรุณาเปิดในบราวเซอร์มือถือและอนุญาตกล้อง";
         }
+    }
 
-        function checkColor() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = 10; canvas.height = 10;
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                ctx.drawImage(video, video.videoWidth/2, video.videoHeight/2, 1, 1, 0, 0, 1, 1);
-                const p = ctx.getImageData(0, 0, 1, 1).data;
-                const r = p[0], g = p[1], b = p[2];
+    function processFrame() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = 100; canvas.height = 100;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            
+            // อ่านค่าพิกเซลตรงกึ่งกลาง
+            ctx.drawImage(video, video.videoWidth/2, video.videoHeight/2, 1, 1, 0, 0, 1, 1);
+            const p = ctx.getImageData(0, 0, 1, 1).data;
+            const r = p[0], g = p[1], b = p[2];
 
-                // Logic ตรวจสอบสี (ม่วง-น้ำเงิน-เขียว)
-                if (b > r && b > g) {
-                    resultDiv.innerHTML = "✅ สด (ม่วง/น้ำเงิน)<br><small>ปลอดภัยต่อการบริโภค</small>";
-                    resultDiv.style.color = "#155724"; resultDiv.style.backgroundColor = "#d4edda";
-                } else if (g > r && g > b) {
-                    resultDiv.innerHTML = "❌ อันตราย (เขียว/เหลือง)<br><small>พบก๊าซเน่าเสีย ห้ามกิน!</small>";
-                    resultDiv.style.color = "#721c24"; resultDiv.style.backgroundColor = "#f8d7da";
-                } else {
-                    resultDiv.innerHTML = "⚠️ กำลังตรวจวัด...";
-                    resultDiv.style.color = "#856404"; resultDiv.style.backgroundColor = "#fff3cd";
-                }
+            rgbVal.innerText = `R:${r} G:${g} B:${b}`;
+
+            // --- Logic ตัดสินความสด (ปรับค่าตัวเลขตามแสงจริงของคุณ) ---
+            if (b > r + 15 && b > g) { 
+                // โทนสีน้ำเงิน/ม่วง (สดมาก)
+                updateUI("✅ สดมาก", "ปลอดภัยต่อการบริโภค", "#28a745", "#d4edda", "white");
+            } else if (g > r + 10 && g > b - 10) { 
+                // โทนสีเขียว (เริ่มเสีย/อันตราย)
+                updateUI("❌ อันตราย!", "พบก๊าซเน่าเสีย ห้ามรับประทาน", "#dc3545", "#f8d7da", "white");
+            } else if (r > 150 && g > 150 && b > 150) {
+                updateUI("⚪ รอการสแกน", "เลื่อนแผ่นฟิล์มมาไว้ตรงกลาง", "#ddd", "white", "#666");
+            } else {
+                updateUI("⚠️ กำลังสแกน...", "ปรับแสงให้สว่างเพียงพอ", "#ffc107", "#fff3cd", "#333");
             }
-            requestAnimationFrame(checkColor);
         }
+        requestAnimationFrame(processFrame);
+    }
 
-        video.addEventListener('loadeddata', checkColor);
-        start();
-    </script>
+    function updateUI(status, msg, bodyColor, cardColor, textColor) {
+        statusText.innerText = status;
+        msgText.innerText = msg;
+        document.body.style.backgroundColor = bodyColor;
+        resultCard.style.backgroundColor = cardColor;
+        statusText.style.color = textColor;
+    }
+
+    video.addEventListener('play', processFrame);
+    startCamera();
+</script>
+
 </body>
 </html>
