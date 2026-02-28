@@ -1,23 +1,111 @@
-function checkFreshness(hueValue) {
-    if (hueValue >= 135 && hueValue <= 170) {
-        return {
-            status: "FRESH (สดมาก)",
-            message: "✅ อาหารยังสดใหม่ สีม่วงคงที่ ปลอดภัยต่อการบริโภค",
-            color: "#8E44AD" // Purple
-        };
-    } else if (hueValue >= 90 && hueValue < 135) {
-        return {
-            status: "WARNING (เริ่มเปลี่ยน)",
-            message: "⚠️ เริ่มตรวจพบก๊าซแอมโมเนีย สีเริ่มเปลี่ยนเป็นน้ำเงิน ควรปรุงอาหารทันที",
-            color: "#2980B9" // Blue
-        };
-    } else if (hueValue >= 30 && hueValue < 90) {
-        return {
-            status: "SPOILED (เน่าเสีย)",
-            message: "❌ อันตราย! พบก๊าซเน่าเสียสูง แผ่นฟิล์มเปลี่ยนเป็นสีเขียว/เหลือง ห้ามรับประทาน",
-            color: "#27AE60" // Green
-        };
-    } else {
-        return { status: "ERROR", message: "ตรวจไม่พบแผ่นวัดหรือแสงสว่างไม่เพียงพอ", color: "#BDC3C7" };
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Freshness Detector AI</title>
+    <style>
+        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; text-align: center; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 400px; margin: auto; }
+        #video-container { position: relative; width: 100%; border-radius: 15px; overflow: hidden; background: #000; line-height: 0; }
+        video { width: 100%; height: auto; transform: scaleX(1); }
+        .reticle { position: absolute; top: 50%; left: 50%; width: 40px; height: 40px; border: 3px solid white; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); pointer-events: none; }
+        #result-card { margin-top: 20px; padding: 20px; border-radius: 15px; transition: 0.3s; }
+        .status-text { font-size: 28px; font-weight: bold; margin: 0; }
+        .rgb-info { font-size: 14px; color: #666; margin-top: 10px; }
+        .color-preview { width: 50px; height: 50px; border-radius: 50%; margin: 10px auto; border: 2px solid #ddd; }
+        button { background: #007bff; color: white; border: none; padding: 12px 25px; border-radius: 10px; font-size: 16px; margin-top: 15px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>เครื่องตรวจความสดอาหาร</h2>
+    <p>นำแผ่นฟิล์มมาจ่อที่วงกลมตรงกลาง</p>
+    
+    <div id="video-container">
+        <video id="webcam" autoplay playsinline></video>
+        <div class="reticle"></div>
+    </div>
+
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <div id="result-card">
+        <div id="color-circle" class="color-preview"></div>
+        <p id="status" class="status-text">กำลังเริ่มต้นกล้อง...</p>
+        <p id="rgb-val" class="rgb-info">RGB: (0, 0, 0)</p>
+    </div>
+    
+    <button onclick="location.reload()">รีเฟรชกล้อง</button>
+</div>
+
+<script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const statusText = document.getElementById('status');
+    const rgbVal = document.getElementById('rgb-val');
+    const resultCard = document.getElementById('result-card');
+    const colorCircle = document.getElementById('color-circle');
+
+    // 1. ขออนุญาตเข้าถึงกล้องหลัง
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", focusMode: "continuous" } 
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            statusText.innerText = "❌ เข้าถึงกล้องไม่ได้";
+            console.error(err);
+        }
     }
-}
+
+    // 2. วิเคราะห์สี
+    function processFrame() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // ดึงค่าพิกเซลตรงจุดศูนย์กลาง
+            const x = canvas.width / 2;
+            const y = canvas.height / 2;
+            const pixel = ctx.getImageData(x, y, 1, 1).data;
+            const r = pixel[0], g = pixel[1], b = pixel[2];
+
+            // อัปเดต UI
+            rgbVal.innerText = `ค่าสีที่อ่านได้ RGB: (${r}, ${g}, ${b})`;
+            colorCircle.style.backgroundColor = `rgb(${r},${g},${b})`;
+
+            // 3. ตรรกะตัดสินความสด (อ้างอิงจากสีอัญชัน)
+            // ปรับแต่งตัวเลขช่วงค่าสีได้ที่นี่
+            if (b > r + 20 && b > g) { 
+                // สีโทนน้ำเงิน/ม่วง (สด)
+                updateStatus("✅ อาหารสดมาก", "#d4edda", "#155724");
+            } else if (g > r && g > b - 20) { 
+                // สีเริ่มเขียว/เหลือง (เสีย)
+                updateStatus("❌ อาหารเน่าเสีย", "#f8d7da", "#721c24");
+            } else {
+                updateStatus("⚠️ รอการสแกน...", "#fff3cd", "#856404");
+            }
+        }
+        requestAnimationFrame(processFrame);
+    }
+
+    function updateStatus(text, bgColor, textColor) {
+        statusText.innerText = text;
+        resultCard.style.backgroundColor = bgColor;
+        statusText.style.color = textColor;
+    }
+
+    video.addEventListener('loadeddata', () => {
+        statusText.innerText = "🔍 พร้อมสแกนแล้ว";
+        processFrame();
+    });
+
+    startCamera();
+</script>
+
+</body>
+</html>
