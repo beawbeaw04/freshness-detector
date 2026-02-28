@@ -1,102 +1,24 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <title>Freshness Detector PRO (iPad Support)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <style>
-        body { text-align: center; font-family: sans-serif; background-color: #f4f7f9; padding: 20px; color: #333; margin: 0; }
-        #video { width: 100%; max-width: 500px; border: 5px solid #fff; border-radius: 30px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); background: #000; }
-        .status-card { margin-top: 20px; padding: 25px; border-radius: 20px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: 0.3s; }
-        #statusText { font-size: 36px; font-weight: bold; display: block; }
-        #startBtn { padding: 25px 50px; font-size: 24px; background: #007AFF; color: white; border: none; border-radius: 50px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,122,255,0.4); font-weight: bold; margin-top: 50px; }
-        #colorPreview { width: 60px; height: 60px; margin: 15px auto; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-    </style>
-</head>
-<body>
-    <div id="setupView">
-        <h1 style="margin-top:100px;">🍎 ระบบตรวจความสด (iPad Ready)</h1>
-        <p>กรุณาปิดโหมดเงียบ และกดปุ่มเพื่อเริ่มสแกน</p>
-        <button id="startBtn">🔘 เริ่มทำงานและเปิดเสียง</button>
-    </div>
-
-    <div id="mainView" style="display:none;">
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="canvas" style="display:none;"></canvas>
-        <div id="colorPreview"></div>
-        <div class="status-card" id="statusCard">
-            <span id="statusText">รอผลวิเคราะห์...</span>
-            <p id="rgbVal" style="font-size:12px; color:#aaa; margin-top:10px;">RGB: (0, 0, 0)</p>
-        </div>
-    </div>
-
-    <!-- ไฟล์เสียงมาตรฐาน (Link สำรองสำหรับ Apple Device) -->
-    <audio id="sound1" src="https://notification-sounds.com" preload="auto"></audio>
-    <audio id="sound2" src="https://notification-sounds.com" preload="auto"></audio>
-    <audio id="sound3" src="https://notification-sounds.com" preload="auto"></audio>
-
-    <script>
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const statusText = document.getElementById('statusText');
-        const statusCard = document.getElementById('statusCard');
-        const colorPreview = document.getElementById('colorPreview');
-        const startBtn = document.getElementById('startBtn');
-        
-        let lastStatus = "";
-
-        // ปลดล็อกเสียงสำหรับ iPad เมื่อกดปุ่ม
-        startBtn.onclick = () => {
-            // เล่นเสียงสั้นๆ เพื่อปลดล็อกระบบ Audio ของ Apple
-            const audios = [document.getElementById('sound1'), document.getElementById('sound2'), document.getElementById('sound3')];
-            audios.forEach(a => { a.play(); a.pause(); a.currentTime = 0; });
-
-            document.getElementById('setupView').style.display = 'none';
-            document.getElementById('mainView').style.display = 'block';
-            
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-                .then(stream => { video.srcObject = stream; })
-                .catch(err => { alert("กรุณาอนุญาตการเข้าถึงกล้อง"); });
-        }
-
-        function analyzeColor() {
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            if (canvas.width > 0) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const pixel = ctx.getImageData(canvas.width/2, canvas.height/2, 1, 1).data;
-                const r = pixel[0], g = pixel[1], b = pixel[2];
-
-                colorPreview.style.backgroundColor = `rgb(${r},${g},${b})`;
-                document.getElementById('rgbVal').innerText = `RGB: (${r}, ${g}, ${b})`;
-
-                let currentStatus = "";
-                if (b > 110 && r < 120) { 
-                    currentStatus = "S1";
-                    statusText.innerText = "✅ สดมาก";
-                    statusCard.style.backgroundColor = "#E8F5E9";
-                } else if (g > 100 && b > 80) {
-                    currentStatus = "S2";
-                    statusText.innerText = "⚠️ เริ่มเปลี่ยนสี";
-                    statusCard.style.backgroundColor = "#FFFDE7";
-                } else if (g > r && g > b) {
-                    currentStatus = "S3";
-                    statusText.innerText = "❌ อันตราย!";
-                    statusCard.style.backgroundColor = "#FFEBEE";
-                }
-
-                if (currentStatus !== lastStatus && currentStatus !== "") {
-                    if (currentStatus === "S1") document.getElementById('sound1').play().catch(()=>{});
-                    if (currentStatus === "S2") document.getElementById('sound2').play().catch(()=>{});
-                    if (currentStatus === "S3") document.getElementById('sound3').play().catch(()=>{});
-                    lastStatus = currentStatus;
-                }
-            }
-            requestAnimationFrame(analyzeColor);
-        }
-        video.addEventListener('play', analyzeColor);
-    </script>
-</body>
-</html>
+// ตัวอย่าง Logic สำหรับ JavaScript/Node.js ในโปรเจกต์ GitHub ของคุณ
+function checkFreshness(hueValue) {
+    if (hueValue >= 135 && hueValue <= 170) {
+        return {
+            status: "FRESH (สดมาก)",
+            message: "✅ อาหารยังสดใหม่ สีม่วงคงที่ ปลอดภัยต่อการบริโภค",
+            color: "#8E44AD" // Purple
+        };
+    } else if (hueValue >= 90 && hueValue < 135) {
+        return {
+            status: "WARNING (เริ่มเปลี่ยน)",
+            message: "⚠️ เริ่มตรวจพบก๊าซแอมโมเนีย สีเริ่มเปลี่ยนเป็นน้ำเงิน ควรปรุงอาหารทันที",
+            color: "#2980B9" // Blue
+        };
+    } else if (hueValue >= 30 && hueValue < 90) {
+        return {
+            status: "SPOILED (เน่าเสีย)",
+            message: "❌ อันตราย! พบก๊าซเน่าเสียสูง แผ่นฟิล์มเปลี่ยนเป็นสีเขียว/เหลือง ห้ามรับประทาน",
+            color: "#27AE60" // Green
+        };
+    } else {
+        return { status: "ERROR", message: "ตรวจไม่พบแผ่นวัดหรือแสงสว่างไม่เพียงพอ", color: "#BDC3C7" };
+    }
+}
