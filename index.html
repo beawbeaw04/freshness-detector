@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Freshness Color Detector</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { text-align: center; font-family: sans-serif; }
+        #video { width: 100%; max-width: 400px; border: 5px solid #ccc; }
+        #colorBox { width: 100px; height: 100px; margin: 10px auto; border: 2px solid #000; }
+        .status { font-size: 24px; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>สแกนสีแผ่นอัญชัน</h1>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    
+    <div id="colorBox"></div>
+    <p id="rgbText">RGB: (0, 0, 0)</p>
+    <div id="statusText" class="status">รอการสแกน...</div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const colorBox = document.getElementById('colorBox');
+        const rgbText = document.getElementById('rgbText');
+        const statusText = document.getElementById('statusText');
+
+        // 1. เปิดกล้องมือถือ (ด้านหลัง)
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => { alert("กรุณาอนุญาตให้เข้าถึงกล้อง"); });
+
+        // 2. ฟังก์ชันอ่านค่าสีจากจุดกึ่งกลาง
+        function detectColor() {
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            if (canvas.width > 0) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // อ่านสีที่จุดกึ่งกลางจอ
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const pixel = ctx.getImageData(centerX, centerY, 1, 1).data;
+                const r = pixel[0], g = pixel[1], b = pixel[2];
+
+                // แสดงผลสีและค่า RGB
+                colorBox.style.backgroundColor = `rgb(${r},${g},${b})`;
+                rgbText.innerText = `RGB: (${r}, ${g}, ${b})`;
+
+                // 3. ใส่เงื่อนไข (Logic) ความสดจากค่าสีอัญชัน
+                if (b > 130 && r < 100) { // สีม่วง/น้ำเงิน
+                    statusText.innerText = "✅ อาหารสดมาก";
+                    statusText.style.color = "green";
+                } else if (g > 100 && b > 80) { // เริ่มเขียว
+                    statusText.innerText = "⚠️ เริ่มเปลี่ยนแปลง";
+                    statusText.style.color = "orange";
+                } else if (g > r && g > b) { // เขียวชัดเจน
+                    statusText.innerText = "❌ อันตราย ห้ามกิน!";
+                    statusText.style.color = "red";
+                }
+            }
+            requestAnimationFrame(detectColor); // ทำงานต่อเนื่องวนลูป
+        }
+
+        video.addEventListener('play', detectColor);
+    </script>
+</body>
+</html>
