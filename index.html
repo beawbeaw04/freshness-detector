@@ -1,51 +1,31 @@
-function processFrame() {
+ {
     if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = 100; canvas.height = 100;
+        canvas.width = 1; canvas.height = 1; // ใช้ขนาดเล็กเพื่อประหยัดทรัพยากร
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(video, video.videoWidth/2, video.videoHeight/2, 1, 1, 0, 0, 1, 1);
         const p = ctx.getImageData(0, 0, 1, 1).data;
         
-        // แก้ไขดึงค่า RGB ให้ถูกต้อง
-        const r = p[0], g = p[1], b = p[2];
+        const r = p[0], g = p[1], b = p[2]; // ดึงค่าที่ถูกต้อง
 
         const currentHex = rgbToHex(r, g, b).toUpperCase();
         liveColorBar.style.backgroundColor = currentHex;
         hexText.innerText = currentHex;
         rgbVal.innerText = `RGB: (${r}, ${g}, ${b})`;
 
-        // --- สูตรคำนวณ % ความสด (อิงจากค่า Blue) ---
-        // คำนวณหาค่าเฉลี่ยความสว่างเพื่อเช็คว่ามีวัตถุหน้ากล้องหรือไม่
-        const brightness = (r + g + b) / 3;
+        // สูตรคำนวณความสดอิงตามสีน้ำเงิน (Blue) ของอัญชัน
+        const total = r + g + b;
         let freshnessScore = 0;
-
-        if (brightness > 30) { // ป้องกันการคำนวณตอนมืดหรือไม่มีวัตถุ
-            // สูตร: เน้นสัดส่วน Blue ต่อค่าสีทั้งหมด
-            const total = r + g + b;
-            const bRatio = b / total; 
-            // ปกติอัญชันสด bRatio จะอยู่ที่ประมาณ 0.4 - 0.6
-            freshnessScore = Math.round((bRatio * 200)); 
-            if (freshnessScore > 100) freshnessScore = 100;
-            if (freshnessScore < 0) freshnessScore = 0;
+        if (total > 50) { // เช็คว่ามีแสงพอ
+            freshnessScore = Math.min(100, Math.round((b / total) * 250)); 
         }
 
-        // อัปเดตแถบ Gauge
-        document.getElementById('percent-text').innerText = freshnessScore;
-        const progressBar = document.getElementById('progress-bar');
-        progressBar.style.width = freshnessScore + "%";
-
-        // --- Logic ตัดสินสถานะ ---
+        // อัปเดต UI
         if (freshnessScore >= 70) {
-            updateUI("✅ สดมาก", "ปลอดภัยต่อการบริโภค", "#28a745", "#d4edda", "#155724");
-            progressBar.style.backgroundColor = "#28a745";
+            updateUI("✅ สดมาก (" + freshnessScore + "%)", "ปลอดภัยต่อการบริโภค", "#28a745", "#d4edda", "#155724");
         } else if (freshnessScore >= 40) {
-            updateUI("⚠️ เริ่มเปลี่ยนแปลง", "เริ่มเสื่อมสภาพ ควรล้างให้สะอาด", "#ffc107", "#fff3cd", "#856404");
-            progressBar.style.backgroundColor = "#ffc107";
-        } else if (brightness <= 30) {
-            updateUI("🔍 สแกนสี...", "เลื่อนแผ่นฟิล์มมาไว้ในวงกลม", "#f8f9fa", "white", "#333");
-            progressBar.style.width = "0%";
+            updateUI("⚠️ เริ่มเปลี่ยนสี (" + freshnessScore + "%)", "ควรระมัดระวัง", "#ffc107", "#fff3cd", "#856404");
         } else {
-            updateUI("❌ อันตราย!", "พบก๊าซเน่าเสีย ห้ามรับประทาน", "#dc3545", "#f8d7da", "#721c24");
-            progressBar.style.backgroundColor = "#dc3545";
+            updateUI("❌ อันตราย!", "ห้ามรับประทาน", "#dc3545", "#f8d7da", "#721c24");
         }
     }
     requestAnimationFrame(processFrame);
