@@ -1,128 +1,52 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ระบบตรวจความสดอัญชัน - คำแนะนำละเอียด</title>
-    <style>
-        body { font-family: 'Prompt', sans-serif; text-align: center; margin: 0; padding: 0; transition: background 0.5s; background-color: #f8f9fa; }
-        .container { padding: 15px; max-width: 450px; margin: auto; }
+function processFrame() {
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = 100; canvas.height = 100;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(video, video.videoWidth/2, video.videoHeight/2, 1, 1, 0, 0, 1, 1);
+        const p = ctx.getImageData(0, 0, 1, 1).data;
         
-        /* ส่วนแสดงกล้อง */
-        #video-container { position: relative; width: 100%; border-radius: 25px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.3); background: #000; line-height: 0; border: 4px solid #fff; }
-        video { width: 100%; height: auto; }
-        .reticle { position: absolute; top: 50%; left: 50%; width: 50px; height: 50px; border: 3px solid #fff; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 10; animation: pulse 2s infinite; }
-        
-        /* การ์ดแสดงผล */
-        #result-card { margin-top: 15px; padding: 25px; border-radius: 25px; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.15); border: 1px solid #eee; transition: 0.3s; }
-        
-        .color-display-wrapper { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 10px; }
-        #live-color-bar { width: 50px; height: 50px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.2); }
-        #hex-text { font-family: monospace; font-size: 16px; font-weight: bold; color: #333; }
+        // แก้ไขดึงค่า RGB ให้ถูกต้อง
+        const r = p[0], g = p[1], b = p[2];
 
-        .status-text { font-size: 32px; font-weight: bold; margin: 5px 0; line-height: 1.2; }
-        .advise-text { font-size: 18px; font-weight: 500; margin-bottom: 15px; padding: 0 10px; }
-        .rgb-info { font-size: 12px; color: #777; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 10px; display: inline-block; }
-        
-        @keyframes pulse { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.1); } 100% { transform: translate(-50%, -50%) scale(1); } }
-        button { background: rgba(255,255,255,0.8); color: #333; border: 1px solid #ddd; padding: 10px 20px; border-radius: 50px; margin-top: 15px; cursor: pointer; font-weight: bold; }
-    </style>
-</head>
-<body>
+        const currentHex = rgbToHex(r, g, b).toUpperCase();
+        liveColorBar.style.backgroundColor = currentHex;
+        hexText.innerText = currentHex;
+        rgbVal.innerText = `RGB: (${r}, ${g}, ${b})`;
 
-<div class="container">
-    <h3 style="margin-bottom:10px; color:#333;">เครื่องวัดความสด (Digital Sensor)</h3>
-    
-    <div id="video-container">
-        <video id="webcam" autoplay playsinline></video>
-        <div class="reticle"></div>
-    </div>
+        // --- สูตรคำนวณ % ความสด (อิงจากค่า Blue) ---
+        // คำนวณหาค่าเฉลี่ยความสว่างเพื่อเช็คว่ามีวัตถุหน้ากล้องหรือไม่
+        const brightness = (r + g + b) / 3;
+        let freshnessScore = 0;
 
-    <div id="result-card">
-        <div class="color-display-wrapper">
-            <div id="live-color-bar"></div>
-            <div id="hex-text">#------</div>
-        </div>
-        <div id="status" class="status-text">⌛ เตรียมกล้อง...</div>
-        <div id="advise" class="advise-text">กรุณานำแผ่นฟิล์มมาไว้ตรงกลางวงกลม</div>
-        <div id="rgb-val" class="rgb-info">RGB: (0, 0, 0)</div>
-    </div>
-    
-    <button onclick="location.reload()">🔄 รีเฟรชระบบ</button>
-</div>
+        if (brightness > 30) { // ป้องกันการคำนวณตอนมืดหรือไม่มีวัตถุ
+            // สูตร: เน้นสัดส่วน Blue ต่อค่าสีทั้งหมด
+            const total = r + g + b;
+            const bRatio = b / total; 
+            // ปกติอัญชันสด bRatio จะอยู่ที่ประมาณ 0.4 - 0.6
+            freshnessScore = Math.round((bRatio * 200)); 
+            if (freshnessScore > 100) freshnessScore = 100;
+            if (freshnessScore < 0) freshnessScore = 0;
+        }
 
-<canvas id="canvas" style="display:none;"></canvas>
+        // อัปเดตแถบ Gauge
+        document.getElementById('percent-text').innerText = freshnessScore;
+        const progressBar = document.getElementById('progress-bar');
+        progressBar.style.width = freshnessScore + "%";
 
-<script>
-    const video = document.getElementById('webcam');
-    const canvas = document.getElementById('canvas');
-    const statusText = document.getElementById('status');
-    const adviseText = document.getElementById('advise');
-    const rgbVal = document.getElementById('rgb-val');
-    const resultCard = document.getElementById('result-card');
-    const liveColorBar = document.getElementById('live-color-bar');
-    const hexText = document.getElementById('hex-text');
-
-    async function startCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-            video.srcObject = stream;
-        } catch (err) {
-            statusText.innerText = "❌ กล้องไม่พร้อม";
+        // --- Logic ตัดสินสถานะ ---
+        if (freshnessScore >= 70) {
+            updateUI("✅ สดมาก", "ปลอดภัยต่อการบริโภค", "#28a745", "#d4edda", "#155724");
+            progressBar.style.backgroundColor = "#28a745";
+        } else if (freshnessScore >= 40) {
+            updateUI("⚠️ เริ่มเปลี่ยนแปลง", "เริ่มเสื่อมสภาพ ควรล้างให้สะอาด", "#ffc107", "#fff3cd", "#856404");
+            progressBar.style.backgroundColor = "#ffc107";
+        } else if (brightness <= 30) {
+            updateUI("🔍 สแกนสี...", "เลื่อนแผ่นฟิล์มมาไว้ในวงกลม", "#f8f9fa", "white", "#333");
+            progressBar.style.width = "0%";
+        } else {
+            updateUI("❌ อันตราย!", "พบก๊าซเน่าเสีย ห้ามรับประทาน", "#dc3545", "#f8d7da", "#721c24");
+            progressBar.style.backgroundColor = "#dc3545";
         }
     }
-
-    function componentToHex(c) {
-        var hex = c.toString(16);
-        return hex.length == 1 ? "0" + hex : hex;
-    }
-
-    function rgbToHex(r, g, b) {
-        return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
-    }
-
-    function processFrame() {
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = 100; canvas.height = 100;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            ctx.drawImage(video, video.videoWidth/2, video.videoHeight/2, 1, 1, 0, 0, 1, 1);
-            const p = ctx.getImageData(0, 0, 1, 1).data;
-            const r = p, g = p, b = p;
-
-            const currentHex = rgbToHex(r, g, b).toUpperCase();
-            liveColorBar.style.backgroundColor = currentHex;
-            hexText.innerText = currentHex;
-            rgbVal.innerText = `RGB: (${r}, ${g}, ${b})`;
-
-            // --- ใช้ Logic และคำแนะนำที่คุณต้องการ ---
-            if (b > 130 && r < 120) { 
-                // สีม่วง/น้ำเงิน
-                updateUI("✅ สดมาก", "ปลอดภัยต่อการบริโภค", "#28a745", "#d4edda", "#155724");
-            } else if (g > 100 && b > 80) { 
-                // เริ่มเขียว
-                updateUI("⚠️ เริ่มเปลี่ยนแปลง", "ต้องรีบประทานให้เร็วและต้องทานสุก", "#ffc107", "#fff3cd", "#856404");
-            } else if (g > r && g > b) { 
-                // เขียวชัดเจน
-                updateUI("❌ อันตราย!", "พบก๊าซเน่าเสีย ห้ามรับประทาน", "#dc3545", "#f8d7da", "#721c24");
-            } else {
-                updateUI("🔍 สแกนสี...", "เลื่อนแผ่นฟิล์มมาไว้ในวงกลม", "#f8f9fa", "white", "#333");
-            }
-        }
-        requestAnimationFrame(processFrame);
-    }
-
-    function updateUI(status, advise, bodyBg, cardBg, textColor) {
-        statusText.innerText = status;
-        adviseText.innerText = advise;
-        document.body.style.backgroundColor = bodyBg;
-        resultCard.style.backgroundColor = cardBg;
-        statusText.style.color = textColor;
-        adviseText.style.color = textColor;
-    }
-
-    video.addEventListener('play', processFrame);
-    startCamera();
-</script>
-
-</body>
-</html>
+    requestAnimationFrame(processFrame);
+}
