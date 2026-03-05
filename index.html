@@ -3,68 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ระบบตรวจความสดอัญชัน - Ver. 2026</title>
+    <title>Freshness Scan Pro</title>
     <style>
         @import url('https://fonts.googleapis.com');
-        body { font-family: 'Prompt', sans-serif; text-align: center; margin: 0; padding: 0; transition: background 0.5s; background-color: #f8f9fa; }
-        .container { padding: 15px; max-width: 450px; margin: auto; }
         
-        /* ส่วนแสดงกล้อง */
-        #video-container { position: relative; width: 100%; border-radius: 25px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.3); background: #000; line-height: 0; border: 4px solid #fff; }
-        video { width: 100%; height: auto; }
-        .reticle { position: absolute; top: 50%; left: 50%; width: 60px; height: 60px; border: 4px solid #fff; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 10; animation: pulse 2s infinite; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
-        
-        /* การ์ดแสดงผล */
-        #result-card { margin-top: 15px; padding: 20px; border-radius: 25px; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.15); border: 1px solid #eee; transition: 0.3s; }
-        
-        .color-display-wrapper { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 15px; }
-        #live-color-bar { width: 45px; height: 45px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.2); }
-        #hex-text { font-family: monospace; font-size: 18px; font-weight: bold; color: #333; }
+        :root {
+            --primary: #4a90e2;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --bg: #f0f2f5;
+        }
 
-        /* แถบระดับความสด */
-        .gauge-container { margin: 15px 0; text-align: left; }
-        .gauge-label { font-size: 14px; margin-bottom: 5px; font-weight: 500; color: #666; }
-        .progress-bg { width: 100%; height: 15px; background: #eee; border-radius: 10px; overflow: hidden; }
-        #progress-bar { width: 0%; height: 100%; background: #28a745; transition: 0.5s ease-out; }
+        body { 
+            font-family: 'Prompt', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            transition: background 0.4s;
+        }
 
-        .status-text { font-size: 32px; font-weight: bold; margin: 5px 0; }
-        .advise-text { font-size: 18px; font-weight: 500; margin-bottom: 10px; }
-        .rgb-info { font-size: 12px; color: #777; background: rgba(0,0,0,0.05); padding: 4px 10px; border-radius: 10px; display: inline-block; }
+        .app-header {
+            width: 100%;
+            padding: 20px 0;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            font-weight: 700;
+            font-size: 20px;
+            color: #333;
+        }
+
+        .main-container {
+            width: 90%;
+            max-width: 400px;
+        }
+
+        /* กล้อง */
+        #camera-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background: #000;
+            border-radius: 30px;
+            overflow: hidden;
+            border: 5px solid white;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        .scan-target {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80px;
+            height: 80px;
+            border: 4px dashed rgba(255,255,255,0.8);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            z-index: 10;
+            animation: rotate 4s linear infinite;
+        }
+
+        @keyframes rotate { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        /* การ์ดข้อมูล */
+        .info-card {
+            margin-top: -40px;
+            position: relative;
+            z-index: 20;
+            background: white;
+            padding: 25px;
+            border-radius: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .status-badge {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        /* ส่วนแสดง % ความสด */
+        .score-section {
+            margin: 20px 0;
+        }
+
+        .score-label { font-size: 14px; color: #888; margin-bottom: 8px; }
         
-        @keyframes pulse { 0% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.7; } 100% { transform: translate(-50%, -50%) scale(1); } }
-        button { background: #333; color: white; border: none; padding: 12px 25px; border-radius: 50px; margin-top: 15px; cursor: pointer; font-weight: bold; font-family: 'Prompt'; }
+        .progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: #eee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #score-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .color-preview {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #f8f9fa;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+
+        .advice-box {
+            font-size: 16px;
+            color: #555;
+            line-height: 1.5;
+            min-height: 48px;
+        }
+
+        .btn-refresh {
+            margin-top: 20px;
+            background: #333;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-family: 'Prompt';
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-refresh:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h3 style="margin-bottom:10px; color:#333;">เครื่องวัดความสดอัญชัน (Digital)</h3>
-    
-    <div id="video-container">
+<div class="app-header">💠 เครื่องตรวจความสดอัญชัน</div>
+
+<div class="main-container">
+    <div id="camera-wrapper">
         <video id="webcam" autoplay playsinline></video>
-        <div class="reticle"></div>
+        <div class="scan-target"></div>
     </div>
 
-    <div id="result-card">
-        <div class="color-display-wrapper">
-            <div id="live-color-bar"></div>
-            <div id="hex-text">#------</div>
+    <div class="info-card">
+        <div class="color-preview">
+            <div id="color-dot" class="dot" style="background: #ccc;"></div>
+            <span id="hex-label">#------</span>
         </div>
 
-        <div id="status" class="status-text">⌛ เตรียมกล้อง...</div>
+        <div id="status-text" class="status-badge">กำลังเตรียมกล้อง...</div>
         
-        <div class="gauge-container">
-            <div class="gauge-label">ระดับความสด: <span id="percent-text">0</span>%</div>
-            <div class="progress-bg">
-                <div id="progress-bar"></div>
+        <div class="score-section">
+            <div class="score-label">ระดับความสด: <span id="score-num">0</span>%</div>
+            <div class="progress-bar-container">
+                <div id="score-fill"></div>
             </div>
         </div>
 
-        <div id="advise" class="advise-text">กรุณานำวัตถุมาไว้ตรงกลางวงกลม</div>
-        <div id="rgb-val" class="rgb-info">RGB: (0, 0, 0)</div>
+        <div id="advice-text" class="advice-box">ส่องดอกอัญชันให้ตรงกลางวงกลม</div>
+        
+        <button class="btn-refresh" onclick="location.reload()">🔄 เริ่มสแกนใหม่</button>
+        <div id="rgb-debug" style="font-size: 10px; color: #ccc; margin-top: 10px;">RGB: (0,0,0)</div>
     </div>
-    
-    <button onclick="location.reload()">🔄 รีเฟรชระบบ</button>
 </div>
 
 <canvas id="canvas" style="display:none;"></canvas>
@@ -72,104 +186,87 @@
 <script>
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
-    const statusText = document.getElementById('status');
-    const adviseText = document.getElementById('advise');
-    const rgbVal = document.getElementById('rgb-val');
-    const resultCard = document.getElementById('result-card');
-    const liveColorBar = document.getElementById('live-color-bar');
-    const hexText = document.getElementById('hex-text');
-    const progressBar = document.getElementById('progress-bar');
-    const percentText = document.getElementById('percent-text');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    
+    const statusText = document.getElementById('status-text');
+    const adviceText = document.getElementById('advice-text');
+    const scoreNum = document.getElementById('score-num');
+    const scoreFill = document.getElementById('score-fill');
+    const colorDot = document.getElementById('color-dot');
+    const hexLabel = document.getElementById('hex-label');
+    const rgbDebug = document.getElementById('rgb-debug');
 
-    // 1. เริ่มต้นกล้อง
-    async function startCamera() {
+    // 1. เปิดกล้อง
+    async function initApp() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: "environment" } 
             });
             video.srcObject = stream;
-        } catch (err) {
-            statusText.innerText = "❌ กล้องไม่พร้อม";
-            adviseText.innerText = "กรุณาเปิดผ่าน HTTPS หรืออนุญาตกล้อง";
+        } catch (e) {
+            statusText.innerText = "❌ กล้องไม่ทำงาน";
+            adviceText.innerText = "กรุณาเปิดผ่าน HTTPS หรือกดอนุญาตกล้อง";
         }
     }
 
-    // 2. ฟังก์ชันแปลงสี
-    function componentToHex(c) {
-        var hex = c.toString(16);
-        return hex.length == 1 ? "0" + hex : hex;
-    }
+    // 2. แปลง RGB เป็น Hex
+    const toHex = (c) => c.toString(16).padStart(2, '0').toUpperCase();
 
-    function rgbToHex(r, g, b) {
-        return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
-    }
-
-    // 3. ฟังก์ชันประมวลผล (หัวใจหลัก)
-    function processFrame() {
+    // 3. เริ่มประมวลผลวิดีโอ
+    function analyze() {
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = 100; canvas.height = 100;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            
-            // ดึงค่าสีจากกึ่งกลางวิดีโอ (1x1 pixel)
+            canvas.width = 64; canvas.height = 64;
+            // วาดเฉพาะส่วนกลางของกล้อง
             ctx.drawImage(video, video.videoWidth/2, video.videoHeight/2, 1, 1, 0, 0, 1, 1);
-            const p = ctx.getImageData(0, 0, 1, 1).data;
-            
-            const r = p[0];
-            const g = p[1];
-            const b = p[2];
+            const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
 
-            const currentHex = rgbToHex(r, g, b).toUpperCase();
-            liveColorBar.style.backgroundColor = currentHex;
-            hexText.innerText = currentHex;
-            rgbVal.innerText = `RGB: (${r}, ${g}, ${b})`;
+            const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+            colorDot.style.backgroundColor = hex;
+            hexLabel.innerText = hex;
+            rgbDebug.innerText = `RGB: (${r}, ${g}, ${b})`;
 
-            // --- สูตรคำนวณความสด (Logic: เน้นความเด่นของ Blue ต่อ Red) ---
+            // --- สูตรคำนวณความสด (อิงตามธรรมชาติของดอกอัญชัน) ---
             const brightness = (r + g + b) / 3;
-            let score = 0;
+            let freshness = 0;
 
-            if (brightness > 40) { 
+            if (brightness > 45) { // ป้องกันแสงน้อยเกินไป
                 const total = r + g + b;
-                // อัญชันสด ค่า B ต้องสูงกว่า R และ G อย่างชัดเจน
-                const bRatio = b / total; 
-                score = Math.round(bRatio * 230); // ปรับตัวคูณเพื่อความแม่นยำ
-                if (score > 100) score = 100;
-                if (score < 0) score = 0;
+                const bRatio = b / total; // สัดส่วนสีน้ำเงิน
+                
+                // อัญชันสดจะมีค่า Blue เด่นกว่าอย่างชัดเจน
+                freshness = Math.round(bRatio * 240); 
+                if (freshness > 100) freshness = 100;
+                if (freshness < 0) freshness = 0;
             }
 
-            percentText.innerText = score;
-            progressBar.style.width = score + "%";
+            // อัปเดต UI ตามเปอร์เซ็นต์
+            scoreNum.innerText = freshness;
+            scoreFill.style.width = freshness + "%";
 
-            // --- เงื่อนไขการแสดงผล ---
-            if (score >= 70) { 
-                updateUI("✅ สดมาก", "ปลอดภัยต่อการบริโภค", "#28a745", "#d4edda", "#155724");
-                progressBar.style.backgroundColor = "#28a745";
-            } else if (score >= 40) { 
-                updateUI("⚠️ เริ่มเปลี่ยนสี", "เริ่มเสื่อมสภาพ ควรระมัดระวัง", "#ffc107", "#fff3cd", "#856404");
-                progressBar.style.backgroundColor = "#ffc107";
-            } else if (brightness <= 40) {
-                updateUI("🔍 สแกนสี...", "เลื่อนดอกอัญชันมาไว้ในวงกลม", "#f8f9fa", "white", "#333");
-                progressBar.style.width = "0%";
-            } else { 
-                updateUI("❌ อันตราย!", "พบก๊าซเน่าเสีย/สีผิดปกติ ห้ามรับประทาน", "#dc3545", "#f8d7da", "#721c24");
-                progressBar.style.backgroundColor = "#dc3545";
+            if (freshness >= 70) {
+                updateUI("✅ สดมาก", "ปลอดภัย สีน้ำเงินสดใส", "#28a745");
+            } else if (freshness >= 40) {
+                updateUI("⚠️ เริ่มเปลี่ยนแปลง", "สีเริ่มซีดหรือคล้ำ ควรระวัง", "#ffc107");
+            } else if (brightness <= 45) {
+                updateUI("🔍 ค้นหา...", "ขยับกล้องหาแสงสว่าง", "#888");
+                scoreFill.style.width = "0%";
+            } else {
+                updateUI("❌ อันตราย!", "พบความเน่าเสีย ห้ามรับประทาน", "#dc3545");
             }
         }
-        requestAnimationFrame(processFrame);
+        requestAnimationFrame(analyze);
     }
 
-    function updateUI(status, advise, bodyBg, cardBg, textColor) {
+    function updateUI(status, advice, color) {
         statusText.innerText = status;
-        adviseText.innerText = advise;
-        document.body.style.backgroundColor = bodyBg;
-        resultCard.style.backgroundColor = cardBg;
-        statusText.style.color = textColor;
-        adviseText.style.color = textColor;
+        statusText.style.color = color;
+        adviceText.innerText = advice;
+        scoreFill.style.backgroundColor = color;
     }
 
-    video.addEventListener('play', processFrame);
-    startCamera();
+    video.addEventListener('play', analyze);
+    initApp();
 </script>
 
 </body>
 </html>
-
