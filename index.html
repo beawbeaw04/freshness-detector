@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Indicator Freshness Scan - Slow Read</title>
+    <title>Indicator Scan Pro - Scientific Monitor</title>
     <style>
         @import url('https://googleapis.com');
         
@@ -138,7 +138,7 @@
 </head>
 <body>
 
-<div class="app-header">💠 ระบบตรวจความสดด้วยฟิล์มวัดสี (อ่านค่าแบบช้า)</div>
+<div class="app-header">💠 ระบบตรวจวัดความสด (หน่วงเวลารับค่า 3 วินาที)</div>
 
 <div class="main-container">
     <div id="camera-wrapper">
@@ -184,7 +184,7 @@
     const rgbDebug = document.getElementById('rgb-debug');
 
     let lastUpdateTime = 0;
-    const UPDATE_INTERVAL = 1500; // หน่วงเวลาอ่านค่าทุกๆ 1500 มิลลิวินาที (1.5 วินาที)
+    const UPDATE_INTERVAL = 3000; // แก้ไขเป็น 3000 มิลลิวินาที เพื่อหยุดรอให้อ่านค่านาน 3 วินาที
 
     async function initApp() {
         try {
@@ -202,13 +202,13 @@
 
     function analyze(timestamp) {
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            // เช็คว่าเวลาผ่านไปครบ 1.5 วินาทีหรือยัง หากยังไม่ครบให้ข้ามการคำนวณ เพื่อล็อกค่าหน้าจอให้นิ่ง
+            // ถ้ายืนส่องนิ่งๆ ยังไม่ครบ 3 วินาที จะยังไม่เปลี่ยนค่าตัวเลขเพื่อไม่ให้ค่าแกว่ง
             if (timestamp - lastUpdateTime >= UPDATE_INTERVAL) {
                 lastUpdateTime = timestamp;
 
                 canvas.width = 64; canvas.height = 64;
                 
-                // อ่านค่าเฉลี่ยแบบกลุ่มจุด (5x5 พิกเซลกึ่งกลาง) เพื่อไม่ให้ตัวเลขแกว่งจากสัญญาณรบกวนในภาพ
+                // คำนวณบล็อกพื้นที่สี 5x5 พิกเซลเพื่อคัดกรองสัญญาณรบกวนของกล้อง
                 ctx.drawImage(video, video.videoWidth/2 - 2, video.videoHeight/2 - 2, 5, 5, 0, 0, 5, 5);
                 const imgData = ctx.getImageData(0, 0, 5, 5).data;
                 
@@ -231,28 +231,33 @@
                 let freshness = 0;
                 let colorName = "";
 
-                if (brightness <= 30) {
+                if (brightness <= 35) {
                     updateUI("🔍 ค้นหา...", "ขยับกล้องส่องแผ่นฟิล์มวัดสีให้ตรงจุดกึ่งกลาง", "#888");
                     scoreNum.innerText = 0;
                     scoreFill.style.width = "0%";
                 } else {
-                    // ลอจิกเปรียบเทียบสัดส่วนสีเพื่อแก้ไขปัญหากล้องเจอแสงสะท้อนจ้า
-                    if (b > g && r > g) {
-                        if (g < 100) {
-                            colorName = "💜 สีม่วงเข้ม";
-                            freshness = 100;
-                        } else {
-                            colorName = "💙 สีม่วงอมฟ้า";
-                            freshness = 85;
-                        }
+                    // --- 🧠 ตรรกะแยกสีอัจฉริยะ (อิงตามฐานข้อมูลตัวเลขจริงของคุณ) ---
+                    
+                    if (g <= 65) {
+                        // 1. กลุ่มสีม่วงเข้ม (สดมากที่สุด) เช่น 110, 40, 150
+                        colorName = "💜 สีม่วงเข้ม";
+                        freshness = 100;
                         updateUI(`✅ สดมาก [${colorName}]`, "สีฟิล์มปกติ อาหารมีความสดสูง บริโภคได้อย่างปลอดภัย", "#28a745");
-                    } 
-                    else if (b > r && b > g && g > r) {
+                    }
+                    else if (b >= 165 && g > 65 && g <= 115 && r >= 65) {
+                        // 2. กลุ่มสีม่วงอมฟ้า (สดมาก) เช่น 85, 80, 175 และ 124, 106, 202
+                        colorName = "💙 สีม่วงอมฟ้า";
+                        freshness = 85;
+                        updateUI(`✅ สดมาก [${colorName}]`, "สีฟิล์มปกติ อาหารมีความสดสูง บริโภคได้อย่างปลอดภัย", "#28a745");
+                    }
+                    else if (b >= 170 && g >= 90 && g <= 115 && r < 65) {
+                        // 3. กลุ่มสีน้ำเงิน (เริ่มเก่า) เช่น 55, 100, 190
                         colorName = "🔷 สีน้ำเงิน";
                         freshness = 50;
                         updateUI(`⚠️ เริ่มเปลี่ยนแปลง [${colorName}]`, "เริ่มมีการปล่อยก๊าซ/เสื่อมสภาพ ควรระมัดระวังในการใช้งาน", "#ffc107");
-                    } 
+                    }
                     else {
+                        // 4. กลุ่มสีเขียวอมฟ้า (อันตราย/เน่าเสีย) เช่น 40, 150, 170
                         colorName = "🟢 สีเขียวอมฟ้า";
                         freshness = 0;
                         updateUI(`❌ อันตราย! [${colorName}]`, "ด่างหรือก๊าซเน่าเสียสูงเกินเกณฑ์มาตรฐาน ห้ามบริโภคเด็ดขาด", "#dc3545");
@@ -269,16 +274,3 @@
 
     function updateUI(status, advice, color) {
         statusText.innerText = status;
-        statusText.style.color = color;
-        adviceText.innerText = advice;
-        scoreFill.style.backgroundColor = color;
-    }
-
-    video.addEventListener('play', () => {
-        requestAnimationFrame(analyze);
-    });
-    initApp();
-</script>
-
-</body>
-</html>
