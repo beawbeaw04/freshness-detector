@@ -1,54 +1,284 @@
-function analyze() {
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = 64; canvas.height = 64;
-        ctx.drawImage(video, video.videoWidth/2, video.videoHeight/2, 1, 1, 0, 0, 1, 1);
-        const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Indicator Freshness Scan - Slow Read</title>
+    <style>
+        @import url('https://googleapis.com');
+        
+        :root {
+            --primary: #4a90e2;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --bg: #f4f6f9;
+        }
 
-        const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-        colorDot.style.backgroundColor = hex;
-        hexLabel.innerText = hex;
-        rgbDebug.innerText = `RGB: (${r}, ${g}, ${b})`;
+        body { 
+            font-family: 'Prompt', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            transition: background 0.4s;
+        }
 
-        const brightness = (r + g + b) / 3;
-        let freshness = 0;
-        let colorName = "";
+        .app-header {
+            width: 100%;
+            padding: 20px 0;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            font-weight: 700;
+            font-size: 20px;
+            color: #333;
+            text-align: center;
+        }
 
-        if (brightness <= 30) {
-            updateUI("🔍 ค้นหา...", "ขยับกล้องส่องแผ่นฟิล์มวัดสีให้ตรงจุดกึ่งกลาง", "#888");
-            scoreNum.innerText = 0;
-            scoreFill.style.width = "0%";
-        } else {
-            // ลอจิกใหม่อิงตามสัดส่วนสีจริงจากหน้างาน (แก้ไขปัญหากล้องเจอแสงจ้าแล้วค่าพุ่ง)
-            
-            if (b > g && r > g && (b - g) >= 15) {
-                // 1. กลุ่มสีม่วง (ม่วงเข้ม/ม่วงอมฟ้า): ค่า B และ R ต้องชนะ G เสมอ แม้แสงจะจ้ามาก (เช่นกรณี R:216 G:202 B:231)
-                if (g < 100) {
-                    colorName = "💜 สีม่วงเข้ม";
-                    freshness = 100;
-                } else {
-                    colorName = "💙 สีม่วงอมฟ้า";
-                    freshness = 85;
-                }
-                updateUI(`✅ สดมาก [${colorName}]`, "สีฟิล์มปกติ อาหารมีความสดสูง บริโภคได้อย่างปลอดภัย", "#28a745");
-            } 
-            else if (b > r && g > r && b > g) {
-                // 2. กลุ่มสีน้ำเงิน: ค่า B จะสูงโดดเด่นแซงทั้ง G และ R
-                colorName = "🔷 สีน้ำเงิน";
-                freshness = 50;
-                updateUI(`⚠️ เริ่มเปลี่ยนแปลง [${colorName}]`, "เริ่มมีการปล่อยก๊าซ/เสื่อมสภาพ ควรระมัดระวังในการใช้งาน", "#ffc107");
-            } 
-            else {
-                // 3. กลุ่มสีเขียวอมฟ้า: ค่า G จะพุ่งขึ้นมาสูงเด่นเทียบเท่าหรือแซงค่า B และค่า R จะต่ำที่สุด
-                colorName = "🟢 สีเขียวอมฟ้า";
-                freshness = 0;
-                updateUI(`❌ อันตราย! [${colorName}]`, "ด่างหรือก๊าซเน่าเสียสูงเกินเกณฑ์มาตรฐาน ห้ามบริโภคเด็ดขาด", "#dc3545");
-            }
+        .main-container {
+            width: 90%;
+            max-width: 400px;
+        }
 
-            // อัปเดตตัวเลขและแถบเปอร์เซ็นต์บนหน้าจอ
-            scoreNum.innerText = freshness;
-            scoreFill.style.width = freshness + "%";
-            scoreFill.style.backgroundColor = (freshness >= 70) ? "#28a745" : (freshness >= 40 ? "#ffc107" : "#dc3545");
+        #camera-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background: #000;
+            border-radius: 30px;
+            overflow: hidden;
+            border: 5px solid white;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        .scan-target {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80px;
+            height: 80px;
+            border: 4px dashed rgba(255,255,255,0.8);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            z-index: 10;
+            animation: rotate 4s linear infinite;
+        }
+
+        @keyframes rotate { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        .info-card {
+            margin-top: -40px;
+            position: relative;
+            z-index: 20;
+            background: white;
+            padding: 25px;
+            border-radius: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .status-badge {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            line-height: 1.3;
+        }
+
+        .score-section { margin: 20px 0; }
+        .score-label { font-size: 14px; color: #888; margin-bottom: 8px; }
+        
+        .progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: #eee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #score-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--primary);
+            transition: width 0.4s ease-out;
+        }
+
+        .color-preview {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #f8f9fa;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+        .advice-box { font-size: 16px; color: #555; line-height: 1.5; min-height: 48px; }
+        
+        .btn-refresh {
+            margin-top: 20px;
+            background: #333;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-family: 'Prompt';
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-header">💠 ระบบตรวจความสดด้วยฟิล์มวัดสี (อ่านค่าแบบช้า)</div>
+
+<div class="main-container">
+    <div id="camera-wrapper">
+        <video id="webcam" autoplay playsinline></video>
+        <div class="scan-target"></div>
+    </div>
+
+    <div class="info-card">
+        <div class="color-preview">
+            <div id="color-dot" class="dot" style="background: #ccc;"></div>
+            <span id="hex-label">#------</span>
+        </div>
+
+        <div id="status-text" class="status-badge">กำลังเตรียมกล้อง...</div>
+        
+        <div class="score-section">
+            <div class="score-label">ระดับความสดของอาหาร: <span id="score-num">0</span>%</div>
+            <div class="progress-bar-container">
+                <div id="score-fill"></div>
+            </div>
+        </div>
+
+        <div id="advice-text" class="advice-box">นำแผ่นฟิล์มอินดิเคเตอร์มาส่องตรงกลางวงกลม</div>
+        
+        <button class="btn-refresh" onclick="location.reload()">🔄 รีเฟรชระบบ</button>
+        <div id="rgb-debug" style="font-size: 11px; color: #aaa; margin-top: 10px;">RGB: (0,0,0)</div>
+    </div>
+</div>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    
+    const statusText = document.getElementById('status-text');
+    const adviceText = document.getElementById('advice-text');
+    const scoreNum = document.getElementById('score-num');
+    const scoreFill = document.getElementById('score-fill');
+    const colorDot = document.getElementById('color-dot');
+    const hexLabel = document.getElementById('hex-label');
+    const rgbDebug = document.getElementById('rgb-debug');
+
+    let lastUpdateTime = 0;
+    const UPDATE_INTERVAL = 1500; // หน่วงเวลาอ่านค่าทุกๆ 1500 มิลลิวินาที (1.5 วินาที)
+
+    async function initApp() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" } 
+            });
+            video.srcObject = stream;
+        } catch (e) {
+            statusText.innerText = "❌ กล้องไม่ทำงาน";
+            adviceText.innerText = "กรุณาเปิดผ่าน HTTPS หรือกดอนุญาตกล้อง";
         }
     }
-    requestAnimationFrame(analyze);
-}
+
+    const toHex = (c) => c.toString(16).padStart(2, '0').toUpperCase();
+
+    function analyze(timestamp) {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            // เช็คว่าเวลาผ่านไปครบ 1.5 วินาทีหรือยัง หากยังไม่ครบให้ข้ามการคำนวณ เพื่อล็อกค่าหน้าจอให้นิ่ง
+            if (timestamp - lastUpdateTime >= UPDATE_INTERVAL) {
+                lastUpdateTime = timestamp;
+
+                canvas.width = 64; canvas.height = 64;
+                
+                // อ่านค่าเฉลี่ยแบบกลุ่มจุด (5x5 พิกเซลกึ่งกลาง) เพื่อไม่ให้ตัวเลขแกว่งจากสัญญาณรบกวนในภาพ
+                ctx.drawImage(video, video.videoWidth/2 - 2, video.videoHeight/2 - 2, 5, 5, 0, 0, 5, 5);
+                const imgData = ctx.getImageData(0, 0, 5, 5).data;
+                
+                let totalR = 0, totalG = 0, totalB = 0;
+                for (let i = 0; i < imgData.length; i += 4) {
+                    totalR += imgData[i];
+                    totalG += imgData[i+1];
+                    totalB += imgData[i+2];
+                }
+                const r = Math.round(totalR / 25);
+                const g = Math.round(totalG / 25);
+                const b = Math.round(totalB / 25);
+
+                const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+                colorDot.style.backgroundColor = hex;
+                hexLabel.innerText = hex;
+                rgbDebug.innerText = `RGB: (${r}, ${g}, ${b})`;
+
+                const brightness = (r + g + b) / 3;
+                let freshness = 0;
+                let colorName = "";
+
+                if (brightness <= 30) {
+                    updateUI("🔍 ค้นหา...", "ขยับกล้องส่องแผ่นฟิล์มวัดสีให้ตรงจุดกึ่งกลาง", "#888");
+                    scoreNum.innerText = 0;
+                    scoreFill.style.width = "0%";
+                } else {
+                    // ลอจิกเปรียบเทียบสัดส่วนสีเพื่อแก้ไขปัญหากล้องเจอแสงสะท้อนจ้า
+                    if (b > g && r > g) {
+                        if (g < 100) {
+                            colorName = "💜 สีม่วงเข้ม";
+                            freshness = 100;
+                        } else {
+                            colorName = "💙 สีม่วงอมฟ้า";
+                            freshness = 85;
+                        }
+                        updateUI(`✅ สดมาก [${colorName}]`, "สีฟิล์มปกติ อาหารมีความสดสูง บริโภคได้อย่างปลอดภัย", "#28a745");
+                    } 
+                    else if (b > r && b > g && g > r) {
+                        colorName = "🔷 สีน้ำเงิน";
+                        freshness = 50;
+                        updateUI(`⚠️ เริ่มเปลี่ยนแปลง [${colorName}]`, "เริ่มมีการปล่อยก๊าซ/เสื่อมสภาพ ควรระมัดระวังในการใช้งาน", "#ffc107");
+                    } 
+                    else {
+                        colorName = "🟢 สีเขียวอมฟ้า";
+                        freshness = 0;
+                        updateUI(`❌ อันตราย! [${colorName}]`, "ด่างหรือก๊าซเน่าเสียสูงเกินเกณฑ์มาตรฐาน ห้ามบริโภคเด็ดขาด", "#dc3545");
+                    }
+
+                    scoreNum.innerText = freshness;
+                    scoreFill.style.width = freshness + "%";
+                    scoreFill.style.backgroundColor = (freshness >= 70) ? "#28a745" : (freshness >= 40 ? "#ffc107" : "#dc3545");
+                }
+            }
+        }
+        requestAnimationFrame(analyze);
+    }
+
+    function updateUI(status, advice, color) {
+        statusText.innerText = status;
+        statusText.style.color = color;
+        adviceText.innerText = advice;
+        scoreFill.style.backgroundColor = color;
+    }
+
+    video.addEventListener('play', () => {
+        requestAnimationFrame(analyze);
+    });
+    initApp();
+</script>
+
+</body>
+</html>
