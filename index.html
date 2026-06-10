@@ -138,7 +138,7 @@
 </head>
 <body>
 
-<div class="app-header">💠 ระบบตรวจวัดความสด (หน่วงเวลารับค่า 3 วินาที)</div>
+<div class="app-header">💠 ระบบตรวจวัดความสด (เวอร์ชันปรับปรุงสีม่วง)</div>
 
 <div class="main-container">
     <div id="camera-wrapper">
@@ -184,7 +184,7 @@
     const rgbDebug = document.getElementById('rgb-debug');
 
     let lastUpdateTime = 0;
-    const UPDATE_INTERVAL = 3000; // แก้ไขเป็น 3000 มิลลิวินาที เพื่อหยุดรอให้อ่านค่านาน 3 วินาที
+    const UPDATE_INTERVAL = 3000; // หน่วงเวลารับค่าหน้าจอนิ่ง 3 วินาทีเท่าเดิม
 
     async function initApp() {
         try {
@@ -202,13 +202,10 @@
 
     function analyze(timestamp) {
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            // ถ้ายืนส่องนิ่งๆ ยังไม่ครบ 3 วินาที จะยังไม่เปลี่ยนค่าตัวเลขเพื่อไม่ให้ค่าแกว่ง
             if (timestamp - lastUpdateTime >= UPDATE_INTERVAL) {
                 lastUpdateTime = timestamp;
 
                 canvas.width = 64; canvas.height = 64;
-                
-                // คำนวณบล็อกพื้นที่สี 5x5 พิกเซลเพื่อคัดกรองสัญญาณรบกวนของกล้อง
                 ctx.drawImage(video, video.videoWidth/2 - 2, video.videoHeight/2 - 2, 5, 5, 0, 0, 5, 5);
                 const imgData = ctx.getImageData(0, 0, 5, 5).data;
                 
@@ -236,28 +233,28 @@
                     scoreNum.innerText = 0;
                     scoreFill.style.width = "0%";
                 } else {
-                    // --- 🧠 ตรรกะแยกสีอัจฉริยะ (อิงตามฐานข้อมูลตัวเลขจริงของคุณ) ---
+                    // --- 🧠 ตรรกะแยกสีเวอร์ชันปรับปรุงใหม่ (ป้องกันกล้องเพี้ยนแสง) ---
                     
-                    if (g <= 65) {
-                        // 1. กลุ่มสีม่วงเข้ม (สดมากที่สุด) เช่น 110, 40, 150
-                        colorName = "💜 สีม่วงเข้ม";
-                        freshness = 100;
+                    // เงื่อนไขกลุ่มสีม่วง: สีเขียว (G) ต้องต่ำที่สุดเมื่อเทียบกับ แดง (R) และน้ำเงิน (B)
+                    if (g < b && g < r) {
+                        // แยกมิติความเข้มจากค่าสีเขียว
+                        if (g <= 65) {
+                            colorName = "💜 สีม่วงเข้ม";
+                            freshness = 100;
+                        } else {
+                            colorName = "💙 สีม่วงอมฟ้า";
+                            freshness = 85;
+                        }
                         updateUI(`✅ สดมาก [${colorName}]`, "สีฟิล์มปกติ อาหารมีความสดสูง บริโภคได้อย่างปลอดภัย", "#28a745");
                     }
-                    else if (b >= 165 && g > 65 && g <= 115 && r >= 65) {
-                        // 2. กลุ่มสีม่วงอมฟ้า (สดมาก) เช่น 85, 80, 175 และ 124, 106, 202
-                        colorName = "💙 สีม่วงอมฟ้า";
-                        freshness = 85;
-                        updateUI(`✅ สดมาก [${colorName}]`, "สีฟิล์มปกติ อาหารมีความสดสูง บริโภคได้อย่างปลอดภัย", "#28a745");
-                    }
-                    else if (b >= 170 && g >= 90 && g <= 115 && r < 65) {
-                        // 3. กลุ่มสีน้ำเงิน (เริ่มเก่า) เช่น 55, 100, 190
+                    // เงื่อนไขกลุ่มสีน้ำเงิน: สีแดงดร็อปต่ำมาก และสีน้ำเงินต้องชนะสีเขียว
+                    else if (b > g && r < 75) {
                         colorName = "🔷 สีน้ำเงิน";
                         freshness = 50;
                         updateUI(`⚠️ เริ่มเปลี่ยนแปลง [${colorName}]`, "เริ่มมีการปล่อยก๊าซ/เสื่อมสภาพ ควรระมัดระวังในการใช้งาน", "#ffc107");
                     }
+                    // เงื่อนไขกลุ่มสีเขียวอมฟ้า: สีเขียวพุ่งสูงขึ้นมาจนชนะสีแดงหรือขึ้นมาเท่าๆ กับสีน้ำเงิน
                     else {
-                        // 4. กลุ่มสีเขียวอมฟ้า (อันตราย/เน่าเสีย) เช่น 40, 150, 170
                         colorName = "🟢 สีเขียวอมฟ้า";
                         freshness = 0;
                         updateUI(`❌ อันตราย! [${colorName}]`, "ด่างหรือก๊าซเน่าเสียสูงเกินเกณฑ์มาตรฐาน ห้ามบริโภคเด็ดขาด", "#dc3545");
@@ -274,3 +271,16 @@
 
     function updateUI(status, advice, color) {
         statusText.innerText = status;
+        statusText.style.color = color;
+        adviceText.innerText = advice;
+        scoreFill.style.backgroundColor = color;
+    }
+
+    video.addEventListener('play', () => {
+        requestAnimationFrame(analyze);
+    });
+    initApp();
+</script>
+
+</body>
+</html>
